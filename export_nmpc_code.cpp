@@ -38,13 +38,13 @@ int main(int argc, char* argv[])
     {
         weight = 4600;
         buoyancy = 4618;
-        dataFolder = "./gazebo_data/";
+        dataFolder = "./config/gazebo/";
     }
     else if(system == "flatfish" || system == "flat_fish")
     {
         weight = 2800;
         buoyancy = 2812;
-        dataFolder = "./flatfish_data/";
+        dataFolder = "./config/flatfish/";
     }
     else
     {
@@ -119,8 +119,8 @@ int main(int argc, char* argv[])
     Function J;                                 // Cost function
     Function Jn;                                // Terminal cost function
 
-    AHRep = readVariable(dataFolder, "a_h_rep.dat");
-    BHRep = readVariable(dataFolder, "b_h_rep.dat");
+    AHRep = readVariable("./config/", "a_h_rep.dat");
+    BHRep = readVariable("./config/", "b_h_rep.dat");
     M = readVariable(dataFolder, "m_matrix.dat");
     Dl = readVariable(dataFolder, "dl_matrix.dat");
     Dq = readVariable(dataFolder, "dq_matrix.dat");
@@ -147,7 +147,7 @@ int main(int argc, char* argv[])
     DMatrix Q  = eye<double>(J.getDim());
     DMatrix QN = eye<double>(Jn.getDim());
 
-    Q = readVariable(dataFolder, "q_matrix.dat");
+    Q = readVariable("./config/", "q_matrix.dat");
 
     //========================================================================================
     //                                  MOTION MODEL EQUATIONS
