@@ -52,9 +52,6 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-    // Variables for allowing the constraints
-    bool constrainTau = true;
-
     double uncertainty = 0;
 
      /* true  - Export the code to the specified folder
@@ -174,22 +171,16 @@ int main(int argc, char* argv[])
     ocp.minimizeLSQEndTerm(QNexp, Jn);
     ocp.subjectTo(f);
 
-    //	CONTROL CONSTRAINTS
-    if (constrainTau)
-    {
-        // Individual degrees of freedom constraints
-        ocp.subjectTo(tau(3) == 0);
-        ocp.subjectTo(tau(4) == 0);
+    // Individual degrees of freedom constraints
+    ocp.subjectTo(tau(3) == 0);
+    ocp.subjectTo(tau(4) == 0);
 
-        /*
-         Note: If the constraint for Roll is not defined the MPC does not
-         work since there's no possible actuation in that DOF.
-         Always consider Roll equal to zero.
-         */
+    /* Note: If the constraint for Roll is not defined the MPC does not
+     * work since there's no possible actuation in that DOF.
+     * Always consider Roll equal to zero. */
 
-        // Polyhedron set of inequalities
-        ocp.subjectTo(AHRep*tau - BHRep <= 0);
-    }
+    // Polyhedron set of inequalities
+    ocp.subjectTo(AHRep*tau - BHRep <= 0);
 
 
     //========================================================================================
