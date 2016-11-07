@@ -59,15 +59,7 @@ int main(int argc, char* argv[])
 
      /* true  - Export the code to the specified folder
       * false - Simulates the controller inside Acado's environment */
-    bool exportCode = true;
     std::string rockFolder = "/home/rafaelsaback/rock/1_dev/control/uwv_model_pred_control/src";
-
-    /***********************
-     * SIMULATION PARAMETERS
-     ***********************/
-    double simulationTime = 1;
-    DVector reference     = zeros<double>(18);
-    reference(4) = -0.1;
 
     /***********************
      * CONTROLLER SETTINGS
@@ -78,13 +70,6 @@ int main(int argc, char* argv[])
     double sampleTime      = 0.1;
     int    iteractions     = horizon / sampleTime;
     bool   positionControl = false;
-
-    /***********************
-     *       PLOTS
-     ***********************/
-    bool plotPosition = true;
-    bool plotVelocity = true;
-    bool plotTau      = true;
 
     //========================================================================================
     //                                  DEFINING VARIABLES
@@ -181,26 +166,12 @@ int main(int argc, char* argv[])
 
     OCP ocp(0, horizon, iteractions);
 
-    if (exportCode)
-    {
-        // Weighting Matrices for exported controller
-        BMatrix Qexp = eye<bool>(J.getDim());
-        BMatrix QNexp = eye<bool>(Jn.getDim());
+    // Weighting Matrices for exported controller
+    BMatrix Qexp = eye<bool>(J.getDim());
+    BMatrix QNexp = eye<bool>(Jn.getDim());
 
-        ocp.minimizeLSQ(Qexp, J);
-        ocp.minimizeLSQEndTerm(QNexp, Jn);
-    }
-    else
-    {
-        DVector R = zeros<double>(J.getDim(), 1);
-
-        for(uint i = 0; i < reference.size(); i++)
-        {
-            R[i] = reference[i];
-        }
-        ocp.minimizeLSQ(Q, J, R);
-        ocp.minimizeLSQEndTerm(QN, Jn);
-    }
+    ocp.minimizeLSQ(Qexp, J);
+    ocp.minimizeLSQEndTerm(QNexp, Jn);
     ocp.subjectTo(f);
 
     //	CONTROL CONSTRAINTS
@@ -222,159 +193,33 @@ int main(int argc, char* argv[])
 
 
     //========================================================================================
-    //                          CODE GENERATION / CONTROLLER SIMULATION
+    //                                  CODE GENERATION
     //========================================================================================
 
-    //	EXPORTING THE CODE TO ROCK
-    if (exportCode)
-    {
-        OCPexport mpc(ocp);
+    // Export code to ROCK
+    OCPexport mpc(ocp);
 
-        int Ni = 1;
+    int Ni = 1;
 
-        mpc.set(HESSIAN_APPROXIMATION, GAUSS_NEWTON);
-        mpc.set(DISCRETIZATION_TYPE, SINGLE_SHOOTING);
-        mpc.set(INTEGRATOR_TYPE, INT_RK4);
-        mpc.set(NUM_INTEGRATOR_STEPS, iteractions * Ni);
-        mpc.set(HOTSTART_QP, YES);
-        mpc.set(QP_SOLVER, QP_QPOASES);
-        mpc.set(GENERATE_TEST_FILE, NO);
-        mpc.set(GENERATE_MAKE_FILE, NO);
-        mpc.set(GENERATE_MATLAB_INTERFACE, NO);
-        mpc.set(GENERATE_SIMULINK_INTERFACE, NO);
-        mpc.set(CG_USE_VARIABLE_WEIGHTING_MATRIX, YES);
-        mpc.set(CG_HARDCODE_CONSTRAINT_VALUES, YES);
+    mpc.set(HESSIAN_APPROXIMATION, GAUSS_NEWTON);
+    mpc.set(DISCRETIZATION_TYPE, SINGLE_SHOOTING);
+    mpc.set(INTEGRATOR_TYPE, INT_RK4);
+    mpc.set(NUM_INTEGRATOR_STEPS, iteractions * Ni);
+    mpc.set(HOTSTART_QP, YES);
+    mpc.set(QP_SOLVER, QP_QPOASES);
+    mpc.set(GENERATE_TEST_FILE, NO);
+    mpc.set(GENERATE_MAKE_FILE, NO);
+    mpc.set(GENERATE_MATLAB_INTERFACE, NO);
+    mpc.set(GENERATE_SIMULINK_INTERFACE, NO);
+    mpc.set(CG_USE_VARIABLE_WEIGHTING_MATRIX, YES);
+    mpc.set(CG_HARDCODE_CONSTRAINT_VALUES, YES);
 
-        if (mpc.exportCode(rockFolder.c_str()) != SUCCESSFUL_RETURN)
-            exit( EXIT_FAILURE);
+    if (mpc.exportCode(rockFolder.c_str()) != SUCCESSFUL_RETURN)
+        exit( EXIT_FAILURE);
 
-        mpc.printDimensionsQP();
+    mpc.printDimensionsQP();
 
-        return EXIT_SUCCESS;
-    }
-    //	SIMULATING THE CONTROLLER INSIDE ACADO
-    else
-    {
-        //========================================================================================
-        //                               SETTING UP THE PROCESS
-        //========================================================================================
-
-        OutputFcn identity;
-        DynamicSystem dynamicSystem(f, identity);
-
-        Process process(dynamicSystem, INT_RK45);
-        process.set(ABSOLUTE_TOLERANCE, 1.0e-2);
-        process.set(INTEGRATOR_TOLERANCE, 1.0e-2);
-
-        //========================================================================================
-        //                                      MPC
-        //========================================================================================
-
-        RealTimeAlgorithm alg(ocp, sampleTime);
-        alg.set(MAX_NUM_ITERATIONS, 3);
-
-        VariablesGrid refGrid(dynamicSystem.getNumDynamicEquations(), 0,
-                simulationTime, simulationTime / sampleTime);
-        refGrid.setZero();
-
-        for (uint i = 0; i < refGrid.getNumPoints(); i++)
-        {
-            for (uint j = 0; j < reference.size(); j++)
-                if(i <= 20)
-                    refGrid(i, j) = i*reference(j)/20;
-                else
-                    refGrid(i, j) = reference(j);
-        }
-
-        StaticReferenceTrajectory trajectory(refGrid);
-        Controller controller(alg, trajectory);
-
-        //========================================================================================
-        //                              SIMULATION ENVIRONMENT
-        //========================================================================================
-
-        SimulationEnvironment sim(0, simulationTime, process, controller);
-
-        DVector x0(dynamicSystem.getNumDynamicEquations());
-        x0.setZero();
-        x0(0) = 0;
-
-        if (sim.init(x0) != SUCCESSFUL_RETURN)
-            exit( EXIT_FAILURE);
-        if (sim.run() != SUCCESSFUL_RETURN)
-            exit( EXIT_FAILURE);
-
-
-        // ...AND PLOT THE RESULTS
-        // ----------------------------------------------------------
-        VariablesGrid sampledProcessOutput;
-        sim.getSampledProcessOutput(sampledProcessOutput);
-
-        VariablesGrid feedbackControl;
-        sim.getFeedbackControl(feedbackControl);
-
-        if (plotPosition)
-        {
-            GnuplotWindow positionWindow;
-            positionWindow.addSubplot(sampledProcessOutput(6),
-                    "Surge Position [m]");
-//            positionWindow.addSubplot(sampledProcessOutput(7),
-//                    "Sway Position [m]");
-            positionWindow.addSubplot(sampledProcessOutput(8),
-                    "Heave Position [m]");
-//            positionWindow.addSubplot( sampledProcessOutput(9),
-//                    "Roll Position [rad]" );
-            positionWindow.addSubplot( sampledProcessOutput(10),
-                    "Pitch Position [rad]" );
-            positionWindow.addSubplot(sampledProcessOutput(11),
-                    "Yaw Position [rad]");
-            positionWindow.plot();
-        }
-
-        if (plotVelocity)
-        {
-            GnuplotWindow velocityWindow;
-            velocityWindow.addSubplot(sampledProcessOutput(0),
-                    "Surge Velocity [m/s]");
-//            velocityWindow.addSubplot(sampledProcessOutput(1),
-//                    "Sway Velocity [m/s]");
-            velocityWindow.addSubplot(sampledProcessOutput(2),
-                    "Heave Velocity [m/s]");
-//            velocityWindow.addSubplot( sampledProcessOutput(3),
-//                    "Roll Velocity [rad/s]" );
-            velocityWindow.addSubplot( sampledProcessOutput(4),
-                    "Pitch Velocity [rad/s]" );
-            velocityWindow.addSubplot(sampledProcessOutput(5),
-                    "Yaw Velocity [rad/s]");
-            velocityWindow.plot();
-        }
-            GnuplotWindow effortWindow;
-            effortWindow.addSubplot(sampledProcessOutput(12),
-                    "Surge Effort [N]");
-//            effortWindow.addSubplot(sampledProcessOutput(13),
-//                    "Sway Effort [N]");
-            effortWindow.addSubplot(sampledProcessOutput(14),
-                    "Heave Effort [N]");
-//            effortWindow.addSubplot( sampledProcessOutput(15),
-//                    "Roll Effort [N]" );
-            effortWindow.addSubplot( sampledProcessOutput(16),
-                    "Pitch Effort [N]" );
-            effortWindow.addSubplot(sampledProcessOutput(17),
-                    "Yaw Effort [N]");
-            effortWindow.plot();
-
-        if (plotTau)
-        {
-            GnuplotWindow tauDotWindow;
-            tauDotWindow.addSubplot(feedbackControl(0), "Surge Effort Increment");
-//            tauDotWindow.addSubplot(feedbackControl(1), "Sway Effort Increment");
-            tauDotWindow.addSubplot(feedbackControl(2), "Heave Effort Increment");
-//            tauDotWindow.addSubplot(feedbackControl(3), "Roll Effort Increment" );
-            tauDotWindow.addSubplot(feedbackControl(4),"Pitch Effort Increment" );
-            tauDotWindow.addSubplot(feedbackControl(5), "Yaw Effort Increment");
-            tauDotWindow.plot();
-        }
-    }
+    return EXIT_SUCCESS;
 }
 
 void SetAbsV(Expression &absV, DifferentialState &v)
