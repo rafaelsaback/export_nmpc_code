@@ -56,7 +56,7 @@ int main(int argc, char* argv[])
 
      /* true  - Export the code to the specified folder
       * false - Simulates the controller inside Acado's environment */
-    std::string rockFolder = "/home/rafaelsaback/rock/1_dev/control/uwv_model_pred_control/src";
+    std::string rockFolder = "/home/rafaelsaback/rock.dev/1-dev/control/uwv_model_pred_control/src";
 
     /***********************
      * CONTROLLER SETTINGS
