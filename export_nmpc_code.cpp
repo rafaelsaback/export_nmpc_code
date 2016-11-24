@@ -287,5 +287,11 @@ DMatrix readVariable(const std::string &folder, const std::string filename)
 
     variable.read(file);
     file.close();
+
+    int num_columns = variable.getNumCols();
+    if(num_columns != 1 && num_columns != 6 && num_columns != 12)
+        throw std::runtime_error("This matrix should have either 1, 6 or 12 colums, but it has "
+               +  std::to_string(num_columns) + ". The associated filename is " + filename);
+
     return variable;
 }
